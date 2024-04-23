@@ -1,65 +1,39 @@
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.Map;
+import java.net.URI;
 
-public class ChatServer {
+class Handler implements URLHandler {
+    // The one bit of state on the server: a number that will be manipulated by
+    // various requests.
+    int num = 0;
 
-    private static String messages = "";
-
-    public static void main(String[] args) throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
-        server.createContext("/add-message", new MessageHandler());
-        server.setExecutor(null); // creates a default executor
-        server.start();
-        System.out.println("Server started on port 8080");
-    }
-
-    static class MessageHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if ("GET".equals(exchange.getRequestMethod())) {
-                Map<String, String> params = queryToMap(exchange.getRequestURI().getQuery());
-                String user = params.get("user");
-                String message = params.get("s");
-                if (user != null && message != null) {
-                    messages += user + ": " + message + "\n";
-                    exchange.sendResponseHeaders(200, messages.getBytes().length);
-                    OutputStream os = exchange.getResponseBody();
-                    os.write(messages.getBytes());
-                    os.close();
-                } else {
-                    String response = "Required parameters are missing";
-                    exchange.sendResponseHeaders(400, response.length());
-                    OutputStream os = exchange.getResponseBody();
-                    os.write(response.getBytes());
-                    os.close();
+    public String handleRequest(URI url) {
+        if (url.getPath().equals("/")) {
+            return String.format("Number: %d", num);
+        } else if (url.getPath().equals("/increment")) {
+            num += 1;
+            return String.format("Number incremented!");
+        } else {
+            if (url.getPath().contains("/add")) {
+                String[] parameters = url.getQuery().split("=");
+                if (parameters[0].equals("count")) {
+                    num += Integer.parseInt(parameters[1]);
+                    return String.format("Number increased by %s! It's now %d", parameters[1], num);
                 }
-            } else {
-                String response = "Method Not Allowed";
-                exchange.sendResponseHeaders(405, response.length());
-                OutputStream os = exchange.getResponseBody();
-                os.write(response.getBytes());
-                os.close();
             }
+            return "404 Not Found!";
         }
     }
+}
 
-    private static Map<String, String> queryToMap(String query) {
-        Map<String, String> result = new HashMap<>();
-        for (String param : query.split("&")) {
-            String[] entry = param.split("=");
-            if (entry.length > 1) {
-                result.put(entry[0], entry[1]);
-            } else {
-                result.put(entry[0], "");
-            }
+class NumberServer {
+    public static void main(String[] args) throws IOException {
+        if(args.length == 0){
+            System.out.println("Missing port number! Try any number between 1024 to 49151");
+            return;
         }
-        return result;
+
+        int port = Integer.parseInt(args[0]);
+
+        Server.start(port, new Handler());
     }
 }
